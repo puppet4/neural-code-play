@@ -37,10 +37,7 @@ export default function Home() {
   }, [questions, selectedCategory, searchQuery]);
 
   const handleRandomQuestion = () => {
-    if (filteredQuestions.length > 0) {
-      const randomQuestion = filteredQuestions[Math.floor(Math.random() * filteredQuestions.length)];
-      navigate(`/question/${randomQuestion.id}`);
-    }
+    navigate('/practice/random');
   };
 
   const categoryLabels = {
