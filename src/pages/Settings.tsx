@@ -28,10 +28,12 @@ export default function Settings() {
     window.location.reload();
   };
 
-  const handleExport = () => {
+  const handleExport = async () => {
+    const questions = await storage.getQuestions();
+    const answers = await storage.getAnswers();
     const data = {
-      questions: storage.getQuestions(),
-      answers: storage.getAnswers(),
+      questions,
+      answers,
       exportTime: new Date().toISOString()
     };
     

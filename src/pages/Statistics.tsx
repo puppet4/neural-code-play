@@ -1,14 +1,21 @@
+import { useEffect, useState } from 'react';
 import Layout from '@/components/Layout';
 import { Card } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { storage } from '@/lib/storage';
-import { calculateStatistics } from '@/lib/statistics';
+import { Statistics } from '@/types/question';
 import { CheckCircle2, XCircle, Target, TrendingUp } from 'lucide-react';
 
-export default function Statistics() {
-  const questions = storage.getQuestions();
-  const answers = storage.getAnswers();
-  const stats = calculateStatistics(questions, answers);
+export default function StatisticsPage() {
+  const [stats, setStats] = useState<Statistics | null>(null);
+
+  useEffect(() => {
+    const loadStatistics = async () => {
+      const statistics = await storage.getStatistics();
+      setStats(statistics);
+    };
+    loadStatistics();
+  }, []);
 
   const categoryLabels = {
     'algorithm': '算法',
@@ -18,6 +25,16 @@ export default function Statistics() {
     'web': 'Web开发',
     'other': '其他'
   };
+
+  if (!stats) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center min-h-96">
+          <div className="text-muted-foreground">加载统计数据中...</div>
+        </div>
+      </Layout>
+    );
+  }
 
   return (
     <Layout>
@@ -109,6 +126,7 @@ export default function Statistics() {
                       </span>
                       <span className="font-medium text-foreground">
                         {accuracy.toFixed(0)}%
+
                       </span>
                     </div>
                   </div>

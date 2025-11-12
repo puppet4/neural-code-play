@@ -1,15 +1,34 @@
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '@/components/Layout';
 import QuestionCard from '@/components/QuestionCard';
 import { storage } from '@/lib/storage';
-import { getWrongQuestions } from '@/lib/statistics';
+import { Question } from '@/types/question';
 import { AlertCircle } from 'lucide-react';
 
 export default function WrongQuestions() {
   const navigate = useNavigate();
-  const questions = storage.getQuestions();
-  const answers = storage.getAnswers();
-  const wrongQuestions = getWrongQuestions(questions, answers);
+  const [wrongQuestions, setWrongQuestions] = useState<Question[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadWrongQuestions = async () => {
+      const questions = await storage.getWrongQuestions();
+      setWrongQuestions(questions);
+      setLoading(false);
+    };
+    loadWrongQuestions();
+  }, []);
+
+  if (loading) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center min-h-96">
+          <div className="text-muted-foreground">加载错题数据中...</div>
+        </div>
+      </Layout>
+    );
+  }
 
   return (
     <Layout>

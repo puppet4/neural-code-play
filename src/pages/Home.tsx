@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '@/components/Layout';
 import QuestionCard from '@/components/QuestionCard';
@@ -13,28 +13,28 @@ export default function Home() {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<QuestionCategory | 'all'>('all');
+  const [questionsWithStatus, setQuestionsWithStatus] = useState<Array<Question & { isAttempted: boolean; isCorrect?: boolean }>>([]);
+  const [loading, setLoading] = useState(true);
 
-  const questions = storage.getQuestions();
-  const answers = storage.getAnswers();
-
-  const answerMap = useMemo(() => {
-    const map = new Map<string, boolean>();
-    answers.forEach(answer => {
-      if (!map.has(answer.questionId) || answer.isCorrect) {
-        map.set(answer.questionId, answer.isCorrect);
-      }
-    });
-    return map;
-  }, [answers]);
+  useEffect(() => {
+    const loadData = async () => {
+      const questions = await storage.getQuestionsWithStatus();
+      setQuestionsWithStatus(questions);
+      setLoading(false);
+    };
+    loadData();
+  }, []);
 
   const filteredQuestions = useMemo(() => {
-    return questions.filter(q => {
+    return questionsWithStatus.filter(q => {
       const matchesCategory = selectedCategory === 'all' || q.category === selectedCategory;
       const matchesSearch = q.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
                            q.content.toLowerCase().includes(searchQuery.toLowerCase());
       return matchesCategory && matchesSearch;
     });
-  }, [questions, selectedCategory, searchQuery]);
+  }, [questionsWithStatus, selectedCategory, searchQuery]);
+
+  const attemptedCount = questionsWithStatus.filter(q => q.isAttempted).length;
 
   const handleRandomQuestion = () => {
     navigate('/practice/random');
@@ -50,6 +50,16 @@ export default function Home() {
     'other': '其他'
   };
 
+  if (loading) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center min-h-96">
+          <div className="text-muted-foreground">加载题库数据中...</div>
+        </div>
+      </Layout>
+    );
+  }
+
   return (
     <Layout>
       <div className="space-y-6">
@@ -58,7 +68,7 @@ export default function Home() {
             <div>
               <h1 className="text-3xl font-bold text-foreground">题库</h1>
               <p className="text-muted-foreground mt-1">
-                共 {questions.length} 道题目，已完成 {answerMap.size} 道
+                共 {questionsWithStatus.length} 道题目，已完成 {attemptedCount} 道
               </p>
             </div>
             <Button onClick={handleRandomQuestion} className="gap-2">
@@ -94,8 +104,8 @@ export default function Home() {
                   key={question.id}
                   question={question}
                   onClick={() => navigate(`/question/${question.id}`)}
-                  isAttempted={answerMap.has(question.id)}
-                  isCorrect={answerMap.get(question.id)}
+                  isAttempted={question.isAttempted}
+                  isCorrect={question.isCorrect}
                 />
               ))}
             </div>

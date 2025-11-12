@@ -29,8 +29,8 @@ export default function RandomPractice() {
   const [practiceCount, setPracticeCount] = useState(0);
   const [correctCount, setCorrectCount] = useState(0);
 
-  const loadRandomQuestion = () => {
-    const questions = storage.getQuestions();
+  const loadRandomQuestion = async () => {
+    const questions = await storage.getQuestions();
     if (questions.length > 0) {
       const randomQuestion = questions[Math.floor(Math.random() * questions.length)];
       setQuestion(randomQuestion);
@@ -47,7 +47,7 @@ export default function RandomPractice() {
 
   useEffect(() => {
     loadRandomQuestion();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSubmit = () => {
     if (!question || !userAnswer || (Array.isArray(userAnswer) && userAnswer.length === 0)) {

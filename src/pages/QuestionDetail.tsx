@@ -29,16 +29,18 @@ export default function QuestionDetail() {
   const [isAiLoading, setIsAiLoading] = useState(false);
 
   useEffect(() => {
-    if (id) {
-      const questions = storage.getQuestions();
-      const found = questions.find(q => q.id === id);
-      if (found) {
-        setQuestion(found);
-      } else {
-        toast.error('题目不存在');
-        navigate('/');
+    const loadQuestion = async () => {
+      if (id) {
+        const found = await storage.getQuestionById(id);
+        if (found) {
+          setQuestion(found);
+        } else {
+          toast.error('题目不存在');
+          navigate('/');
+        }
       }
-    }
+    };
+    loadQuestion();
   }, [id, navigate]);
 
   const handleSubmit = () => {
