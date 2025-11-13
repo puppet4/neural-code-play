@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Layout from '@/components/Layout';
 import { Button } from '@/components/ui/button';
@@ -12,7 +12,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from '@/components/ui/input';
 import { storage } from '@/lib/storage';
 import { Question } from '@/types/question';
-import { ArrowLeft, CheckCircle2, XCircle, Lightbulb, MessageSquare, Send } from 'lucide-react';
+import { AIService } from '@/lib/ai-service';
+import { AIConfigService } from '@/lib/ai-config';
+import { ArrowLeft, CheckCircle2, XCircle, Lightbulb, MessageSquare, Send, Settings } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
@@ -27,6 +29,8 @@ export default function QuestionDetail() {
   const [aiQuestion, setAiQuestion] = useState('');
   const [aiResponse, setAiResponse] = useState('');
   const [isAiLoading, setIsAiLoading] = useState(false);
+  const aiResponseRef = useRef<HTMLDivElement>(null);
+  const dialogContentRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const loadQuestion = async () => {
@@ -42,6 +46,36 @@ export default function QuestionDetail() {
     };
     loadQuestion();
   }, [id, navigate]);
+
+  // 自动滚动到AI回答的底部
+  useEffect(() => {
+    if (aiResponse && isAiLoading) {
+      // 使用 setTimeout 确保DOM更新后再滚动
+      const timeoutId = setTimeout(() => {
+        if (aiResponseRef.current) {
+          // 滚动到AI回答区域的底部
+          aiResponseRef.current.scrollIntoView({
+            behavior: 'smooth',
+            block: 'end',
+            inline: 'nearest'
+          });
+        }
+
+        // 如果在对话框中，也滚动对话框内容
+        if (dialogContentRef.current) {
+          const dialogElement = dialogContentRef.current.closest('[role="dialog"]') as HTMLElement;
+          if (dialogElement) {
+            dialogElement.scrollTo({
+              top: dialogElement.scrollHeight,
+              behavior: 'smooth'
+            });
+          }
+        }
+      }, 50); // 50ms延迟确保渲染完成
+
+      return () => clearTimeout(timeoutId);
+    }
+  }, [aiResponse, isAiLoading]);
 
   const handleSubmit = () => {
     if (!question || !userAnswer || (Array.isArray(userAnswer) && userAnswer.length === 0)) {
@@ -77,16 +111,37 @@ export default function QuestionDetail() {
       return;
     }
 
+    if (!AIConfigService.isConfigured()) {
+      toast.error('请先在设置中配置AI服务', {
+        action: {
+          label: '前往设置',
+          onClick: () => navigate('/settings')
+        }
+      });
+      return;
+    }
+
     setIsAiLoading(true);
-    setAiResponse('');
+    setAiResponse(''); // 清空之前的回答
 
     try {
-      // Placeholder for AI integration
-      // This will be connected to Lovable AI later
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      setAiResponse('AI 功能即将集成，敬请期待！这里将显示 AI 对您问题的详细解答。');
+      const streamResponse = await AIService.askAboutQuestionWithContextStream(
+        aiQuestion,
+        question!,
+        submitted
+      );
+
+      // 使用流式显示
+      let currentResponse = '';
+      for await (const chunk of streamResponse.content) {
+        currentResponse += chunk;
+        setAiResponse(currentResponse);
+      }
+
+      setAiQuestion(''); // 清空问题输入框
     } catch (error) {
-      toast.error('AI 问答失败，请重试');
+      console.error('AI问答失败:', error);
+      toast.error(error instanceof Error ? error.message : 'AI 问答失败，请重试');
     } finally {
       setIsAiLoading(false);
     }
@@ -236,32 +291,77 @@ export default function QuestionDetail() {
               </DialogTrigger>
               <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
                 <DialogHeader>
-                  <DialogTitle className="flex items-center gap-2">
-                    <MessageSquare className="h-5 w-5 text-ai" />
-                    AI 智能问答
-                  </DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>向 AI 提问关于这道题的任何问题</Label>
-                    <div className="flex gap-2">
-                      <Input
-                        placeholder="例如：这道题的解题思路是什么？"
-                        value={aiQuestion}
-                        onChange={(e) => setAiQuestion(e.target.value)}
-                        onKeyPress={(e) => e.key === 'Enter' && handleAiQuestion()}
-                      />
-                      <Button onClick={handleAiQuestion} disabled={isAiLoading} className="gap-2">
-                        <Send className="h-4 w-4" />
-                        {isAiLoading ? '思考中...' : '发送'}
+                  <div className="flex items-center justify-between">
+                    <DialogTitle className="flex items-center gap-2">
+                      <MessageSquare className="h-5 w-5 text-ai" />
+                      AI 智能问答
+                    </DialogTitle>
+                    {!AIConfigService.isConfigured() && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => navigate('/settings')}
+                        className="gap-1"
+                      >
+                        <Settings className="h-3 w-3" />
+                        配置
                       </Button>
-                    </div>
+                    )}
                   </div>
-
-                  {aiResponse && (
-                    <Card className="p-4 bg-muted/50">
-                      <p className="text-sm text-foreground whitespace-pre-wrap">{aiResponse}</p>
+                </DialogHeader>
+                <div className="space-y-4" ref={dialogContentRef}>
+                  {!AIConfigService.isConfigured() ? (
+                    <Card className="p-4 bg-warning/10 border-warning/20">
+                      <p className="text-sm text-warning-foreground">
+                        ⚠️ 请先在设置页面配置AI服务才能使用问答功能
+                      </p>
                     </Card>
+                  ) : (
+                    <>
+                      <div className="space-y-2">
+                        <Label>向 AI 提问关于这道题的任何问题</Label>
+                        <div className="flex gap-2">
+                          <Input
+                            placeholder="例如：这道题的解题思路是什么？"
+                            value={aiQuestion}
+                            onChange={(e) => setAiQuestion(e.target.value)}
+                            onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && handleAiQuestion()}
+                          />
+                          <Button onClick={handleAiQuestion} disabled={isAiLoading} className="gap-2">
+                            <Send className="h-4 w-4" />
+                            {isAiLoading ? '思考中...' : '发送'}
+                          </Button>
+                        </div>
+                      </div>
+
+                      {(aiResponse || isAiLoading) && (
+                        <Card className="p-4 bg-muted/50" ref={aiResponseRef}>
+                          <div className="space-y-2">
+                            {isAiLoading && !aiResponse && (
+                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <div className="flex space-x-1">
+                                  <div className="w-2 h-2 bg-ai rounded-full animate-bounce"></div>
+                                  <div className="w-2 h-2 bg-ai rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                                  <div className="w-2 h-2 bg-ai rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                                </div>
+                                AI 正在思考...
+                              </div>
+                            )}
+                            {aiResponse && (
+                              <div className="space-y-2">
+                                <p className="text-sm text-foreground whitespace-pre-wrap">{aiResponse}</p>
+                                {isAiLoading && (
+                                  <div className="flex items-center gap-1">
+                                    <div className="w-2 h-4 bg-ai animate-pulse"></div>
+                                    <span className="text-xs text-muted-foreground">正在输入...</span>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </Card>
+                      )}
+                    </>
                   )}
                 </div>
               </DialogContent>
